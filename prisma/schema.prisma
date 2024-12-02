@@ -1,0 +1,92 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// 用户模型
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String?
+  password      String
+  role          String        @default("USER") // 可选值: "ADMIN", "MANAGER", "USER"
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  transactions  Transaction[] // 关联的交易记录
+}
+
+// 产品类别
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  products    Product[] // 关联的产品
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// 产品模型
+model Product {
+  id          String        @id @default(cuid())
+  sku         String        @unique // 商品编号
+  name        String
+  description String?
+  price       Float
+  categoryId  String
+  category    Category      @relation(fields: [categoryId], references: [id])
+  inventory   Inventory?    // 关联的库存
+  supplier    Supplier      @relation(fields: [supplierId], references: [id])
+  supplierId  String
+  transactions Transaction[] // 关联的交易记录
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+// 库存模型
+model Inventory {
+  id              String    @id @default(cuid())
+  productId       String    @unique
+  product         Product   @relation(fields: [productId], references: [id])
+  quantity        Int       @default(0)
+  minQuantity     Int       @default(0) // 最小库存警戒线
+  maxQuantity     Int       @default(0) // 最大库存警戒线
+  location        String?   // 库存位置
+  lastChecked     DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// 交易记录模型
+model Transaction {
+  id          String          @id @default(cuid())
+  type        String          // 可选值: "IN", "OUT", "ADJUST", "RETURN"
+  quantity    Int
+  productId   String
+  product     Product         @relation(fields: [productId], references: [id])
+  userId      String
+  user        User            @relation(fields: [userId], references: [id])
+  note        String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+// 供应商模型
+model Supplier {
+  id          String    @id @default(cuid())
+  name        String
+  code        String    @unique // 供应商编码
+  contact     String?   // 联系人
+  phone       String?
+  email       String?
+  address     String?
+  products    Product[] // 关联的产品
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
