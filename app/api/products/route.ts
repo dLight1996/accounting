@@ -7,7 +7,7 @@ const productSchema = z.object({
   name: z.string().min(1, '商品名称不能为空'),
   code: z.string().min(1, '商品编码不能为空'),
   description: z.string().optional(),
-  category: z.string().min(1, '商品分类不能为空'),
+  categoryId: z.string().min(1, '商品分类不能为空'),
   unit: z.string().min(1, '计量单位不能为空'),
   price: z.number().min(0, '价格不能为负'),
 });
@@ -41,6 +41,9 @@ export async function GET(req: Request) {
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { updatedAt: 'desc' },
+        include: {
+          category: true,
+        },
       }),
     ]);
 

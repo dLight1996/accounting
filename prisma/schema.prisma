@@ -12,16 +12,46 @@ datasource db {
 
 // 用户模型
 model User {
-  id            String         @id @default(cuid())
-  username      String         @unique
-  email         String?        @unique
+  id            String        @id @default(cuid())
   name          String?
-  password      String
-  role          String         @default("USER") // 可选值: "ADMIN", "MANAGER", "USER"
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  loginLogs     LoginLog[]     // 登录日志
-  transactions  Transaction[]  // 关联的交易记录
+  email         String?       @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          String        @default("user")
+  accounts      Account[]
+  sessions      Session[]
+  transactions  Transaction[]
+  loginLogs     LoginLog[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // 登录日志
@@ -34,87 +64,76 @@ model LoginLog {
   createdAt DateTime  @default(now())
 }
 
-// 产品类别
-model Category {
-  id          String    @id @default(cuid())
-  name        String    @unique
-  description String?
-  products    Product[] // 关联的产品
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+// 商品列表模型（用于存储不同价格的商品）
+model ProductList {
+  id        Int       @id @default(autoincrement())
+  name      String
+  price     Float
+  unit      String    @default("kg")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+  
+  @@unique([name, price])
 }
 
-// 供应商模型
-model Supplier {
-  id          String    @id @default(cuid())
-  name        String
-  code        String    @unique
-  contact     String?
-  phone       String?
-  email       String?
-  address     String?
-  products    Product[] // 供应的产品
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-}
-
-// 产品模型
+// 产品记录模型（用于存储每次录入的商品）
 model Product {
-  id            String        @id @default(cuid())
-  code          String        @unique // 商品编码
+  id            Int         @id @default(autoincrement())
   name          String
-  description   String?
+  unitPrice     Float
+  quantity      Float
   price         Float
-  categoryId    String
-  category      Category      @relation(fields: [categoryId], references: [id])
-  inventory     Inventory?    // 关联的库存
-  supplier      Supplier      @relation(fields: [supplierId], references: [id])
-  supplierId    String
-  transactions  Transaction[] // 关联的交易记录
-  stockLogs     StockLog[]   // 库存变动记录
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  unit          String
+  kgRatio       Float      @default(1)
+  importDate    DateTime
+  productList   ProductList @relation(fields: [productListId], references: [id])
+  productListId Int
+  inventory     Inventory?
+  stockLogs     StockLog[]
+  transactions  Transaction[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 }
 
 // 库存模型
 model Inventory {
-  id        String    @id @default(cuid())
-  quantity  Int       @default(0)
-  product   Product   @relation(fields: [productId], references: [id])
-  productId String    @unique
-  minStock  Int       @default(0) // 最小库存
-  maxStock  Int?      // 最大库存
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id        Int      @id @default(autoincrement())
+  quantity  Float    @default(0)
+  product   Product  @relation(fields: [productId], references: [id])
+  productId Int      @unique
+  minStock  Int      @default(0) // 最小库存
+  maxStock  Int?     // 最大库存
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // 库存变动记录
 model StockLog {
-  id          String    @id @default(cuid())
-  productId   String
-  product     Product   @relation(fields: [productId], references: [id])
-  type        String    // IN: 入库, OUT: 出库
-  quantity    Int       // 变动数量
-  beforeStock Int       // 变动前库存
-  afterStock  Int       // 变动后库存
-  reason      String?   // 变动原因
-  note        String?   // 备注
-  createdAt   DateTime  @default(now())
+  id          Int      @id @default(autoincrement())
+  productId   Int
+  product     Product  @relation(fields: [productId], references: [id])
+  type        String   // IN: 入库, OUT: 出库
+  quantity    Float
+  beforeStock Float    // 变动前库存
+  afterStock  Float    // 变动后库存
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // 交易记录
 model Transaction {
-  id          String    @id @default(cuid())
-  type        String    // PURCHASE: 采购, SALE: 销售
-  productId   String
-  product     Product   @relation(fields: [productId], references: [id])
+  id          Int      @id @default(autoincrement())
+  productId   Int
+  product     Product  @relation(fields: [productId], references: [id])
   userId      String
-  user        User      @relation(fields: [userId], references: [id])
-  quantity    Int
+  user        User     @relation(fields: [userId], references: [id])
+  type        String   // IN: 入库, OUT: 出库
+  quantity    Float
   price       Float
-  total       Float
-  status      String    // PENDING: 待处理, COMPLETED: 已完成, CANCELLED: 已取消
+  totalAmount Float
   note        String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
