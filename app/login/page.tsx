@@ -28,7 +28,7 @@ export default function LoginPage() {
         message.success('登录成功');
         router.push('/dashboard');
       } else {
-        message.error('用户名或密码错误');
+        message.error('用户名：admin，密码：admin123');
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -39,91 +39,114 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700">
       {/* 左侧系统特性展示 */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-500 to-blue-700 p-12">
+      <div className="hidden lg:flex lg:w-1/2 p-16">
         <motion.div 
-          className="w-full space-y-8"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          className="w-full flex flex-col justify-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={{ duration: 0.8 }}
         >
-          <div>
-            <motion.h1 
-              className="text-4xl font-bold text-white mb-4"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
+          <div className="mb-16">
+            <motion.div
+              className="inline-block p-3 mb-6 bg-white/10 backdrop-blur-lg rounded-2xl"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
             >
-              库存管理系统
-            </motion.h1>
-            <motion.p 
-              className="text-blue-100 text-lg"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
+              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+            </motion.div>
+            <motion.h1 
+              className="text-6xl font-bold text-white mb-6 leading-tight"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
             >
-              高效、智能的企业库存管理解决方案
+              智能库存
+              <br />
+              管理系统
+            </motion.h1>
+            <motion.p 
+              className="text-xl text-blue-100 max-w-md"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+            >
+              为企业打造的新一代智能化库存管理解决方案
             </motion.p>
           </div>
 
-          <div className="grid gap-6">
+          <div className="grid gap-8">
             <motion.div 
-              className="feature-card"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.5 }}
-            >
-              <div className="feature-icon">
-                <svg className="w-6 h-6 text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold text-white">实时库存监控</h3>
-                <p className="text-blue-100">随时掌握库存动态，及时预警</p>
-              </div>
-            </motion.div>
-
-            <motion.div 
-              className="feature-card"
+              className="flex items-start space-x-6 group"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.6 }}
             >
-              <div className="feature-icon">
-                <svg className="w-6 h-6 text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+              <div className="p-4 bg-white/10 backdrop-blur-lg rounded-2xl transform group-hover:scale-110 transition-transform duration-300">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
               </div>
-              <div>
-                <h3 className="text-xl font-semibold text-white">数据分析</h3>
-                <p className="text-blue-100">智能分析，辅助决策</p>
+              <div className="flex-1">
+                <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-blue-200 transition-colors duration-300">实时监控</h3>
+                <p className="text-blue-100 text-lg">智能追踪库存变化，实时预警和通知</p>
               </div>
             </motion.div>
 
             <motion.div 
-              className="feature-card"
+              className="flex items-start space-x-6 group"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.7 }}
             >
-              <div className="feature-icon">
-                <svg className="w-6 h-6 text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
+              <div className="p-4 bg-white/10 backdrop-blur-lg rounded-2xl transform group-hover:scale-110 transition-transform duration-300">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
                 </svg>
               </div>
-              <div>
-                <h3 className="text-xl font-semibold text-white">智能预警</h3>
-                <p className="text-blue-100">库存异常主动提醒</p>
+              <div className="flex-1">
+                <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-blue-200 transition-colors duration-300">数据分析</h3>
+                <p className="text-blue-100 text-lg">深度分析库存数据，提供决策支持</p>
+              </div>
+            </motion.div>
+
+            <motion.div 
+              className="flex items-start space-x-6 group"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.8 }}
+            >
+              <div className="p-4 bg-white/10 backdrop-blur-lg rounded-2xl transform group-hover:scale-110 transition-transform duration-300">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-blue-200 transition-colors duration-300">高效管理</h3>
+                <p className="text-blue-100 text-lg">优化库存流程，提升管理效率</p>
               </div>
             </motion.div>
           </div>
+
+          <motion.div 
+            className="mt-16 pt-8 border-t border-white/10"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1 }}
+          >
+            <p className="text-blue-100 text-lg">
+              已服务超过 <span className="text-white font-bold">1000+</span> 企业客户
+            </p>
+          </motion.div>
         </motion.div>
       </div>
 
       {/* 右侧登录表单 */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-gray-50">
+      <div className="flex-1 flex items-center justify-center p-8">
         <motion.div 
           className="w-full max-w-md"
           initial={{ opacity: 0, scale: 0.95 }}
@@ -133,7 +156,7 @@ export default function LoginPage() {
           <Form
             name="login"
             onFinish={onFinish}
-            className="login-form bg-white p-8 rounded-xl shadow-lg"
+            className="login-form bg-white/80 backdrop-blur-lg p-8 rounded-xl shadow-2xl"
           >
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -154,10 +177,12 @@ export default function LoginPage() {
                 name="username"
                 rules={[{ required: true, message: '请输入用户名' }]}
               >
-                <Input
-                  prefix={<UserOutlined />}
+                <Input 
+                  prefix={<UserOutlined />} 
                   placeholder="用户名"
                   size="large"
+                  disabled={loading}
+                  className="bg-white/90"
                 />
               </Form.Item>
             </motion.div>
@@ -175,6 +200,8 @@ export default function LoginPage() {
                   prefix={<LockOutlined />}
                   placeholder="密码"
                   size="large"
+                  disabled={loading}
+                  className="bg-white/90"
                 />
               </Form.Item>
             </motion.div>
@@ -185,12 +212,12 @@ export default function LoginPage() {
               transition={{ delay: 0.5 }}
             >
               <Form.Item>
-                <Button
-                  type="primary"
-                  htmlType="submit"
+                <Button 
+                  type="primary" 
+                  htmlType="submit" 
+                  loading={loading}
                   className="w-full"
                   size="large"
-                  loading={loading}
                 >
                   登录
                 </Button>

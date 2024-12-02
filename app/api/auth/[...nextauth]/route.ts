@@ -1,4 +1,4 @@
-import { NextAuthOptions } from 'next-auth';
+import NextAuth, { NextAuthOptions } from 'next-auth';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/prisma';
@@ -6,6 +6,11 @@ import bcrypt from 'bcryptjs';
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
+  secret: process.env.NEXTAUTH_SECRET,
+  session: {
+    strategy: 'jwt',
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
   providers: [
     CredentialsProvider({
       name: 'Credentials',
@@ -20,6 +25,14 @@ export const authOptions: NextAuthOptions = {
 
         const user = await prisma.user.findUnique({
           where: { username: credentials.username },
+          select: {
+            id: true,
+            username: true,
+            name: true,
+            email: true,
+            role: true,
+            password: true
+          }
         });
 
         if (!user) {
@@ -35,36 +48,31 @@ export const authOptions: NextAuthOptions = {
           throw new Error('用户名或密码错误');
         }
 
-        return {
-          id: user.id,
-          username: user.username,
-          role: user.role,
-        };
+        const { password, ...userWithoutPassword } = user;
+        return userWithoutPassword;
       },
     }),
   ],
-  session: {
-    strategy: 'jwt',
-  },
-  pages: {
-    signIn: '/login',
-  },
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
+        token.id = user.id;
         token.role = user.role;
-        token.username = user.username;
       }
       return token;
     },
     async session({ session, token }) {
-      if (token) {
-        session.user.role = token.role;
-        session.user.username = token.username;
+      if (session?.user) {
+        session.user.id = token.id as string;
+        session.user.role = token.role as string;
       }
       return session;
     },
   },
+  pages: {
+    signIn: '/login',
+  },
 };
 
-export { authOptions as default } from 'next-auth/next';
+const handler = NextAuth(authOptions);
+export { handler as GET, handler as POST }

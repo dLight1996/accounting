@@ -106,7 +106,9 @@ export default function DashboardLayout({
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Spin size="large" tip="加载中..." />
+        <Spin size="large" tip="加载中...">
+          <div className="p-8" />
+        </Spin>
       </div>
     );
   }
@@ -130,27 +132,29 @@ export default function DashboardLayout({
         collapsible 
         collapsed={collapsed}
         className="shadow-lg"
+        width={260}
+        collapsedWidth={80}
         style={{
           background: colorBgContainer,
           borderRight: '1px solid rgba(0, 0, 0, 0.05)',
         }}
       >
-        <div className="p-4 flex items-center justify-center border-b border-gray-100">
-          <h1 className={`text-lg font-bold text-blue-600 transition-all duration-300 ${
+        <div className="p-6 flex items-center justify-center border-b border-gray-100">
+          <h1 className={`text-xl font-bold text-blue-600 transition-all duration-300 ${
             collapsed ? 'scale-0 w-0' : 'scale-100 w-auto'
           }`}>
             库存管理系统
           </h1>
         </div>
         <div className="p-4 border-b border-gray-100">
-          <div className={`flex items-center space-x-2 ${collapsed ? 'justify-center' : ''}`}>
-            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
-              <span className="text-white">{user.username.charAt(0).toUpperCase()}</span>
+          <div className={`flex items-center space-x-3 ${collapsed ? 'justify-center' : ''}`}>
+            <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
+              <span className="text-white text-lg">{user?.username ? user.username.charAt(0).toUpperCase() : ''}</span>
             </div>
             {!collapsed && (
-              <div>
-                <div className="font-medium">{user.username}</div>
-                <div className="text-xs text-gray-500">{user.role}</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium truncate">{user?.username}</div>
+                <div className="text-sm text-gray-500 truncate">{user?.role}</div>
               </div>
             )}
           </div>
@@ -158,7 +162,10 @@ export default function DashboardLayout({
         <Menu
           mode="inline"
           defaultSelectedKeys={['dashboard']}
-          style={{ border: 'none' }}
+          style={{ 
+            border: 'none',
+            padding: '16px 0'
+          }}
           items={menuItems}
           onClick={handleMenuClick}
         />

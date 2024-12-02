@@ -13,13 +13,25 @@ datasource db {
 // 用户模型
 model User {
   id            String         @id @default(cuid())
-  email         String         @unique
+  username      String         @unique
+  email         String?        @unique
   name          String?
   password      String
-  role          String        @default("USER") // 可选值: "ADMIN", "MANAGER", "USER"
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  transactions  Transaction[] // 关联的交易记录
+  role          String         @default("USER") // 可选值: "ADMIN", "MANAGER", "USER"
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  loginLogs     LoginLog[]     // 登录日志
+  transactions  Transaction[]  // 关联的交易记录
+}
+
+// 登录日志
+model LoginLog {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  ip        String?
+  userAgent String?
+  createdAt DateTime  @default(now())
 }
 
 // 产品类别
@@ -32,61 +44,77 @@ model Category {
   updatedAt   DateTime  @updatedAt
 }
 
-// 产品模型
-model Product {
-  id          String        @id @default(cuid())
-  sku         String        @unique // 商品编号
-  name        String
-  description String?
-  price       Float
-  categoryId  String
-  category    Category      @relation(fields: [categoryId], references: [id])
-  inventory   Inventory?    // 关联的库存
-  supplier    Supplier      @relation(fields: [supplierId], references: [id])
-  supplierId  String
-  transactions Transaction[] // 关联的交易记录
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-}
-
-// 库存模型
-model Inventory {
-  id              String    @id @default(cuid())
-  productId       String    @unique
-  product         Product   @relation(fields: [productId], references: [id])
-  quantity        Int       @default(0)
-  minQuantity     Int       @default(0) // 最小库存警戒线
-  maxQuantity     Int       @default(0) // 最大库存警戒线
-  location        String?   // 库存位置
-  lastChecked     DateTime  @default(now())
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-}
-
-// 交易记录模型
-model Transaction {
-  id          String          @id @default(cuid())
-  type        String          // 可选值: "IN", "OUT", "ADJUST", "RETURN"
-  quantity    Int
-  productId   String
-  product     Product         @relation(fields: [productId], references: [id])
-  userId      String
-  user        User            @relation(fields: [userId], references: [id])
-  note        String?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-}
-
 // 供应商模型
 model Supplier {
   id          String    @id @default(cuid())
   name        String
-  code        String    @unique // 供应商编码
-  contact     String?   // 联系人
+  code        String    @unique
+  contact     String?
   phone       String?
   email       String?
   address     String?
-  products    Product[] // 关联的产品
+  products    Product[] // 供应的产品
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// 产品模型
+model Product {
+  id            String        @id @default(cuid())
+  code          String        @unique // 商品编码
+  name          String
+  description   String?
+  price         Float
+  categoryId    String
+  category      Category      @relation(fields: [categoryId], references: [id])
+  inventory     Inventory?    // 关联的库存
+  supplier      Supplier      @relation(fields: [supplierId], references: [id])
+  supplierId    String
+  transactions  Transaction[] // 关联的交易记录
+  stockLogs     StockLog[]   // 库存变动记录
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+// 库存模型
+model Inventory {
+  id        String    @id @default(cuid())
+  quantity  Int       @default(0)
+  product   Product   @relation(fields: [productId], references: [id])
+  productId String    @unique
+  minStock  Int       @default(0) // 最小库存
+  maxStock  Int?      // 最大库存
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+// 库存变动记录
+model StockLog {
+  id          String    @id @default(cuid())
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id])
+  type        String    // IN: 入库, OUT: 出库
+  quantity    Int       // 变动数量
+  beforeStock Int       // 变动前库存
+  afterStock  Int       // 变动后库存
+  reason      String?   // 变动原因
+  note        String?   // 备注
+  createdAt   DateTime  @default(now())
+}
+
+// 交易记录
+model Transaction {
+  id          String    @id @default(cuid())
+  type        String    // PURCHASE: 采购, SALE: 销售
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id])
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  quantity    Int
+  price       Float
+  total       Float
+  status      String    // PENDING: 待处理, COMPLETED: 已完成, CANCELLED: 已取消
+  note        String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }

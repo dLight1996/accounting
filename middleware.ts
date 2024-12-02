@@ -1,22 +1,35 @@
+import { withAuth } from 'next-auth/middleware';
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
 
-export function middleware(request: NextRequest) {
-  const isAuthenticated = request.cookies.has('auth-token');
-  const isLoginPage = request.nextUrl.pathname === '/login';
+export default withAuth(
+  function middleware(req) {
+    const token = req.nextauth.token;
+    const isAuth = !!token;
+    const isAuthPage = req.nextUrl.pathname.startsWith('/login');
 
-  // 如果用户未登录且不在登录页面，重定向到登录页面
-  if (!isAuthenticated && !isLoginPage && request.nextUrl.pathname.startsWith('/dashboard')) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    if (isAuthPage) {
+      if (isAuth) {
+        return NextResponse.redirect(new URL('/dashboard', req.url));
+      }
+      return null;
+    }
+
+    if (!isAuth) {
+      let from = req.nextUrl.pathname;
+      if (req.nextUrl.search) {
+        from += req.nextUrl.search;
+      }
+      return NextResponse.redirect(
+        new URL(`/login?from=${encodeURIComponent(from)}`, req.url)
+      );
+    }
+  },
+  {
+    callbacks: {
+      authorized: ({ token }) => true,
+    },
   }
-
-  // 如果用户已登录且在登录页面，重定向到仪表盘
-  if (isAuthenticated && isLoginPage) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
-  }
-
-  return NextResponse.next();
-}
+);
 
 export const config = {
   matcher: ['/dashboard/:path*', '/login'],
