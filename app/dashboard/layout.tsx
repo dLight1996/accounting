@@ -12,6 +12,7 @@ import {
   SettingOutlined,
   LogoutOutlined,
   BarChartOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
@@ -20,28 +21,9 @@ const { Header, Sider, Content } = Layout;
 
 const menuItems = [
   {
-    key: '',
+    key: 'dashboard',
     icon: <DashboardOutlined />,
     label: '仪表盘',
-  },
-  {
-    key: 'inventory',
-    icon: <ShoppingCartOutlined />,
-    label: '库存管理',
-    children: [
-      {
-        key: 'inventory/list',
-        label: '库存列表',
-      },
-      {
-        key: 'inventory/in',
-        label: '入库管理',
-      },
-      {
-        key: 'inventory/out',
-        label: '出库管理',
-      },
-    ],
   },
   {
     key: 'products',
@@ -63,6 +45,25 @@ const menuItems = [
     ],
   },
   {
+    key: 'inventory',
+    icon: <ShoppingCartOutlined />,
+    label: '库存管理',
+    children: [
+      {
+        key: 'inventory/list',
+        label: '库存列表',
+      },
+      {
+        key: 'inventory/in',
+        label: '入库管理',
+      },
+      {
+        key: 'inventory/out',
+        label: '出库管理',
+      },
+    ],
+  },
+  {
     key: 'statistics',
     icon: <BarChartOutlined />,
     label: '统计分析',
@@ -74,6 +75,17 @@ const menuItems = [
       {
         key: 'statistics/inventory',
         label: '库存分析',
+      },
+    ],
+  },
+  {
+    key: 'inventory-check',
+    icon: <FileTextOutlined />,
+    label: '盘点管理',
+    children: [
+      {
+        key: 'inventory-check/list',
+        label: '盘点表',
       },
     ],
   },
@@ -122,7 +134,7 @@ export default function DashboardLayout({
   }
 
   const handleMenuClick = ({ key }: { key: string }) => {
-    if (key === '') {
+    if (key === 'dashboard') {
       router.push('/dashboard');
     } else {
       router.push(`/dashboard/${key}`);
@@ -169,7 +181,7 @@ export default function DashboardLayout({
         </div>
         <Menu
           mode="inline"
-          defaultSelectedKeys={['']}
+          defaultSelectedKeys={['dashboard']}
           style={{ 
             border: 'none',
             padding: '20px 12px',
