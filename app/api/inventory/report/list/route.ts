@@ -4,23 +4,56 @@ import { requireAuth } from '@/lib/auth';
 import { getMonthRange } from '@/lib/date-utils';
 import dayjs from 'dayjs';
 
+// 添加缓存
+const CACHE_TTL = 60 * 1000; // 1分钟缓存
+const PAGE_SIZE = 50; // 每页数据量
+let cachedData: { 
+  data: any[]; 
+  totals: any; 
+  timestamp: number;
+  total: number;
+} | null = null;
+
 export async function POST(request: NextRequest) {
   try {
     await requireAuth();
 
-    const { startDate, endDate } = await request.json();
+    const { startDate, endDate, current = 1, pageSize = PAGE_SIZE } = await request.json();
     const start = dayjs(startDate);
     const end = dayjs(endDate);
-    const { startDate: lastMonthStart, endDate: lastMonthEnd } = getMonthRange(start.subtract(1, 'month').toDate());
 
-    // 获取所有库存记录，使用高效的查询
-    const [products, inventoryChecks] = await Promise.all([
+    // 检查缓存是否有效
+    if (
+      cachedData &&
+      Date.now() - cachedData.timestamp < CACHE_TTL &&
+      cachedData.data.length > 0
+    ) {
+      const startIndex = (current - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      const pageData = cachedData.data.slice(startIndex, endIndex);
+
+      const response = NextResponse.json({
+        data: pageData,
+        totals: cachedData.totals,
+        total: cachedData.total,
+        current,
+        pageSize,
+      });
+      response.headers.set('X-Cache', 'HIT');
+      return response;
+    }
+
+    const { startDate: lastMonthStart, endDate: lastMonthEnd } = getMonthRange(
+      start.subtract(1, 'month').toDate()
+    );
+
+    // 使用事务确保数据一致性
+    const [products, inventoryChecks] = await prisma.$transaction([
       prisma.product.findMany({
         select: {
           id: true,
           name: true,
           unit: true,
-          category: true,
         },
         orderBy: {
           name: 'asc',
@@ -57,20 +90,24 @@ export async function POST(request: NextRequest) {
     ]);
 
     // 创建产品映射以提高查找效率
-    const productMap = new Map(products.map(p => [p.id, {
-      id: p.id,
-      name: p.name,
-      unit: p.unit,
-      category: p.category || '',
-      lastMonthQuantity: 0,
-      lastMonthAmount: 0,
-      purchaseQuantity: 0,
-      purchaseAmount: 0,
-      consumeQuantity: 0,
-      consumeAmount: 0,
-      currentQuantity: 0,
-      currentAmount: 0,
-    }]));
+    const productMap = new Map(
+      products.map((p) => [
+        p.id,
+        {
+          id: p.id,
+          name: p.name,
+          unit: p.unit,
+          lastMonthQuantity: 0,
+          lastMonthAmount: 0,
+          purchaseQuantity: 0,
+          purchaseAmount: 0,
+          consumeQuantity: 0,
+          consumeAmount: 0,
+          currentQuantity: 0,
+          currentAmount: 0,
+        },
+      ])
+    );
 
     // 处理库存记录
     let totals = {
@@ -80,12 +117,17 @@ export async function POST(request: NextRequest) {
       currentAmount: 0,
     };
 
-    // 分别处理上月和本月数据
-    inventoryChecks.forEach(check => {
-      const item = productMap.get(check.productId);
-      if (!item) return;
+    // 使用 Map 优化日期比较
+    const lastMonthStartTime = lastMonthStart.getTime();
+    const lastMonthEndTime = lastMonthEnd.getTime();
 
-      if (check.date >= lastMonthStart && check.date <= lastMonthEnd) {
+    // 分别处理上月和本月数据
+    for (const check of inventoryChecks) {
+      const item = productMap.get(check.productId);
+      if (!item) continue;
+
+      const checkDate = new Date(check.date).getTime();
+      if (checkDate >= lastMonthStartTime && checkDate <= lastMonthEndTime) {
         item.lastMonthQuantity = check.quantity;
         item.lastMonthAmount = check.amount;
         item.currentQuantity = check.quantity;
@@ -107,16 +149,34 @@ export async function POST(request: NextRequest) {
         item.currentAmount = check.amount;
         totals.currentAmount = check.amount;
       }
+    }
+
+    const allData = Array.from(productMap.values());
+    const startIndex = (current - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const pageData = allData.slice(startIndex, endIndex);
+
+    // 更新缓存
+    cachedData = {
+      data: allData,
+      totals,
+      timestamp: Date.now(),
+      total: allData.length,
+    };
+
+    // 设置响应头
+    const response = NextResponse.json({
+      data: pageData,
+      totals,
+      total: allData.length,
+      current,
+      pageSize,
     });
-
-    const data = Array.from(productMap.values());
-
-    // 设置缓存控制
-    const response = NextResponse.json({ data, totals });
     response.headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
     response.headers.set('Pragma', 'no-cache');
     response.headers.set('Expires', '0');
-    
+    response.headers.set('X-Cache', 'MISS');
+
     return response;
   } catch (error) {
     console.error('Error in inventory report:', error);

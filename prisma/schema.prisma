@@ -92,6 +92,7 @@ model Product {
   inventory     Inventory?
   stockLogs     StockLog[]
   transactions  Transaction[]
+  inventoryChecks InventoryCheck[]
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 }
@@ -120,6 +121,22 @@ model StockLog {
   note        String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// 库存盘点记录
+model InventoryCheck {
+  id          Int      @id @default(autoincrement())
+  productId   Int
+  product     Product  @relation(fields: [productId], references: [id])
+  date        DateTime
+  type        String   // purchase: 采购, consume: 消耗
+  quantity    Float
+  amount      Float
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([productId, date, type])
 }
 
 // 交易记录
