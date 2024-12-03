@@ -4,63 +4,79 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { EditableProTable } from '@ant-design/pro-components';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { Button, Card, message, Table, Typography, Popconfirm, DatePicker, Space } from 'antd';
-import { getMonthRange } from '@/lib/date-utils';
+import { getInventoryDateRange, formatDateRange } from '@/lib/date-utils';
 import dayjs from 'dayjs';
 import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
-import { exportToExcel } from '@/lib/excel-utils';
+import * as XLSX from 'xlsx';
 
 const { Text } = Typography;
 const { MonthPicker } = DatePicker;
 
-const formatMoney = (value: number) => {
-  return `¥ ${value.toFixed(2)}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-};
-
-// 添加单位换算函数
-const convertToKg = (quantity: number, unit: string) => {
+// 单位换算为公斤的函数
+const convertToKg = (quantity: number, unit: string, kgRatio: number = 1) => {
   const conversionRates: { [key: string]: number } = {
     'kg': 1,
     'g': 0.001,
-    '斤': 0.5,
-    '两': 0.05,
-    'ml': 0.001,  // 假设密度为1
-    'L': 1,       // 假设密度为1
+    't': 1000,
+    'lb': 0.4536,
+    'oz': 0.0283495,
   };
   
-  const rate = conversionRates[unit] || 1;
-  return quantity * rate;
+  const rate = conversionRates[unit.toLowerCase()] || 1;
+  return quantity * rate * kgRatio;
 };
 
-// 格式化数量显示
-const formatQuantity = (value: number, unit: string) => {
-  const kgValue = convertToKg(value, unit);
-  return `${kgValue.toFixed(3)}`;
+// 计算每公斤单价
+const calculatePricePerKg = (price: number, unit: string, kgRatio: number = 1) => {
+  const conversionRates: { [key: string]: number } = {
+    'kg': 1,
+    'g': 0.001,
+    't': 1000,
+    'lb': 0.4536,
+    'oz': 0.0283495,
+  };
+  
+  const rate = conversionRates[unit.toLowerCase()] || 1;
+  return Number((price / (rate * kgRatio)).toFixed(2));
 };
 
-// 计算kg单价
-const calculatePricePerKg = (amount: number, quantity: number, unit: string) => {
-  const kgQuantity = convertToKg(quantity, unit);
-  return kgQuantity > 0 ? amount / kgQuantity : 0;
+// 计算金额
+const calculateAmount = (quantity: number, pricePerKg: number) => {
+  return Number((quantity * pricePerKg).toFixed(2));
 };
 
-// 格式化金额显示
-const formatAmount = (amount: number, quantity: number, unit: string) => {
-  const pricePerKg = calculatePricePerKg(amount, quantity, unit);
-  return formatMoney(pricePerKg);
+// 格式化数量显示（两位小数）
+const formatQuantity = (quantity: number) => {
+  return Number(quantity || 0).toFixed(2);
+};
+
+// 格式化金额显示（两位小数）
+const formatAmount = (amount: number) => {
+  return `¥${Number(amount || 0).toFixed(2)}`;
+};
+
+// 格式化单价显示（两位小数）
+const formatPrice = (price: number) => {
+  return `¥${Number(price || 0).toFixed(2)}/kg`;
 };
 
 interface InventoryItem {
-  id: string;
+  id: number;
   name: string;
   unit: string;
+  price: number;
+  purchaseQuantity: number;
+  kgRatio: number;  // 使用 kgRatio 替代 kgConversion
+  originalUnit: string;
+  originalQuantity: number;
+  originalPrice: number;
   lastMonthQuantity: number;
   lastMonthAmount: number;
-  purchaseQuantity: number;
-  purchaseAmount: number;
   consumeQuantity: number;
   consumeAmount: number;
   currentQuantity: number;
   currentAmount: number;
+  purchaseAmount: number;
 }
 
 interface InventoryTotals {
@@ -80,50 +96,132 @@ export default function InventoryCheckList() {
   const [current, setCurrent] = useState(1);
   const [total, setTotal] = useState(0);
   const [editableKeys, setEditableKeys] = useState<React.Key[]>([]);
-  const [selectedMonth, setSelectedMonth] = useState(dayjs());
+  // 默认选择当前月份
+  const [selectedMonth, setSelectedMonth] = useState<dayjs.Dayjs>(() => {
+    const now = dayjs();
+    // 如果当前日期大于25号，选择当前月
+    // 如果当前日期小于等于25号，选择上个月
+    return now.date() > 25 ? now : now.subtract(1, 'month');
+  });
   const actionRef = useRef<ActionType>();
 
-  const loadData = useCallback(async (page = current) => {
+  // 使用工具函数计算日期范围
+  const dateRange = getInventoryDateRange(selectedMonth);
+
+  console.log('Selected month range:', {
+    month: selectedMonth.format('YYYY-MM'),
+    ...dateRange,
+  });
+
+  // 提取和合并 productList
+  const processProductList = (data: any[]) => {
+    const productMap = new Map();
+
+    data.forEach(dateItem => {
+      dateItem.products.forEach(product => {
+        const { productList } = product;
+        if (productList) {
+          // 将接口返回的数量转换为公斤
+          const kgQuantity = Number(convertToKg(
+            product.quantity || 0,
+            product.unit || 'kg',
+            product.kgRatio || 1
+          ).toFixed(2));
+
+          // 计算每公斤单价
+          const pricePerKg = calculatePricePerKg(
+            product.price || 0,
+            product.unit || 'kg',
+            product.kgRatio || 1
+          );
+
+          if (!productMap.has(productList.id)) {
+            productMap.set(productList.id, {
+              id: productList.id,
+              name: productList.name,
+              unit: 'kg',
+              price: pricePerKg,
+              purchaseQuantity: kgQuantity,
+              lastMonthQuantity: 0,
+              consumeQuantity: 0,
+              currentQuantity: kgQuantity,
+              // 自动计算金额
+              lastMonthAmount: 0, // 初始值为0
+              purchaseAmount: calculateAmount(kgQuantity, pricePerKg),
+              consumeAmount: 0, // 初始值为0
+              currentAmount: calculateAmount(kgQuantity, pricePerKg),
+            });
+          } else {
+            const existingProduct = productMap.get(productList.id);
+            
+            // 更新采购数量（公斤）
+            existingProduct.purchaseQuantity += kgQuantity;
+            
+            if (product.price) {
+              existingProduct.price = pricePerKg;
+            }
+
+            // 更新当前数量（公斤）
+            existingProduct.currentQuantity += kgQuantity;
+            
+            // 自动计算所有金额
+            existingProduct.lastMonthAmount = calculateAmount(existingProduct.lastMonthQuantity, existingProduct.price);
+            existingProduct.purchaseAmount = calculateAmount(existingProduct.purchaseQuantity, existingProduct.price);
+            existingProduct.consumeAmount = calculateAmount(existingProduct.consumeQuantity, existingProduct.price);
+            existingProduct.currentAmount = calculateAmount(existingProduct.currentQuantity, existingProduct.price);
+          }
+        }
+      });
+    });
+
+    return Array.from(productMap.values());
+  };
+
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const { startDate, endDate } = getMonthRange(selectedMonth.toDate());
-      const response = await fetch('/api/inventory/report/list', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          startDate: startDate.toISOString(), 
-          endDate: endDate.toISOString(),
-          current: page,
-          pageSize: PAGE_SIZE,
-        }),
+      console.log('Fetching inventory check data:', {
+        month: selectedMonth.format('YYYY-MM'),
+        ...dateRange,
       });
+
+      const response = await fetch(`/api/inventory/in?start=${dateRange.start}&end=${dateRange.end}`);
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch data');
+        throw new Error(errorData.error || '获取数据失败');
       }
 
-      const { data, totals, total: totalCount, current: currentPage } = await response.json();
-      setDataSource(data);
-      setTotals(totals);
-      setTotal(totalCount);
-      setCurrent(currentPage);
-    } catch (error) {
-      console.error('Error loading data:', error);
-      setError(error instanceof Error ? error.message : 'Failed to load data');
-      message.error('加载数据失败');
+      const data = await response.json();
+      console.log('Raw response data:', JSON.stringify(data, null, 2));
+
+      if (!Array.isArray(data)) {
+        console.error('Expected array but got:', typeof data);
+        setDataSource([]);
+        setTotal(0);
+        setCurrent(1);
+        return;
+      }
+
+      // 处理数据
+      const records = processProductList(data);
+      console.log('Processed records:', records);
+
+      setDataSource(records);
+      setTotal(records.length);
+      setCurrent(1);
+    } catch (err: any) {
+      console.error('Error loading data:', err);
+      setError(err.message || '获取数据失败');
+      setDataSource([]);
+      setTotal(0);
+      setCurrent(1);
     } finally {
       setLoading(false);
     }
-  }, [current, selectedMonth]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData, selectedMonth]);
+  }, [selectedMonth, dateRange]);
 
   const handleSave = async (key: React.Key, row: InventoryItem) => {
     try {
@@ -141,7 +239,7 @@ export default function InventoryCheckList() {
       }
 
       message.success('更新成功');
-      loadData(current);
+      loadData();
     } catch (error) {
       console.error('Error updating data:', error);
       message.error(error instanceof Error ? error.message : '更新失败');
@@ -164,14 +262,14 @@ export default function InventoryCheckList() {
       }
 
       message.success('删除成功');
-      loadData(current);
+      loadData();
     } catch (error) {
       console.error('Error deleting data:', error);
       message.error(error instanceof Error ? error.message : '删除失败');
     }
   };
 
-  const handleExport = useCallback(async () => {
+  const handleExport = async () => {
     if (!dataSource || dataSource.length === 0) {
       message.warning('没有数据可导出');
       return;
@@ -179,87 +277,60 @@ export default function InventoryCheckList() {
 
     try {
       setLoading(true);
-      const { startDate } = getMonthRange(selectedMonth.toDate());
       
-      const response = await fetch('/api/inventory/report/list', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          startDate: startDate.toISOString(), 
-          endDate: dayjs(startDate).endOf('month').toISOString(),
-          current: 1,
-          pageSize: total,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch data for export');
-      }
-
-      const { data: allData } = await response.json();
-      const month = dayjs(startDate).format('YYYY年MM月');
+      const month = selectedMonth.format('YYYY年MM月');
       const filename = `${month}库存盘点表.xlsx`;
 
       const headers = [
-        '商品名称',
+        '商品名称', 
         '单价(元/kg)',
-        '上月数量(kg)',
-        '上月金额',
-        '本月采购数量(kg)',
-        '本月采购金额',
-        '本月消耗数量(kg)',
-        '本月消耗金额',
-        '结存数量(kg)',
-        '结存金额',
+        '上月数量(kg)', 
+        '上月金额(元)',
+        '本月采购数量(kg)', 
+        '本月采购金额(元)',
+        '本月消耗数量(kg)', 
+        '本月消耗金额(元)',
+        '本月结存数量(kg)', 
+        '本月结存金额(元)'
       ];
 
-      const data = allData.map((item: InventoryItem) => [
-        item.name,
-        calculatePricePerKg(item.currentAmount, item.currentQuantity, item.unit).toFixed(2),
-        formatQuantity(item.lastMonthQuantity, item.unit),
-        item.lastMonthAmount.toFixed(2),
-        formatQuantity(item.purchaseQuantity, item.unit),
-        item.purchaseAmount.toFixed(2),
-        formatQuantity(item.consumeQuantity, item.unit),
-        item.consumeAmount.toFixed(2),
-        formatQuantity(item.currentQuantity, item.unit),
-        item.currentAmount.toFixed(2),
-      ]);
+      const records = dataSource.map((item: any) => {
+        return [
+          item.name || '未知产品',
+          formatPrice(item.price),
+          formatQuantity(item.lastMonthQuantity),
+          formatAmount(item.lastMonthAmount),
+          formatQuantity(item.purchaseQuantity),
+          formatAmount(item.purchaseAmount),
+          formatQuantity(item.consumeQuantity),
+          formatAmount(item.consumeAmount),
+          formatQuantity(item.currentQuantity),
+          formatAmount(item.currentAmount)
+        ];
+      });
 
-      if (totals) {
-        // 计算平均单价
-        const calculateAveragePrice = (amount: number, items: InventoryItem[], quantityField: keyof InventoryItem) => {
-          const totalKg = items.reduce((sum, item) => sum + convertToKg(item[quantityField] as number, item.unit), 0);
-          return totalKg > 0 ? amount / totalKg : 0;
-        };
+      // 创建工作表
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...records]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, month);
 
-        const currentAveragePrice = calculateAveragePrice(totals.currentAmount, allData, 'currentQuantity');
+      // 导出文件
+      XLSX.writeFile(wb, filename);
 
-        data.push([
-          '合计',
-          currentAveragePrice.toFixed(2),
-          allData.reduce((sum, item) => sum + convertToKg(item.lastMonthQuantity, item.unit), 0).toFixed(3),
-          totals.lastMonthAmount.toFixed(2),
-          allData.reduce((sum, item) => sum + convertToKg(item.purchaseQuantity, item.unit), 0).toFixed(3),
-          totals.purchaseAmount.toFixed(2),
-          allData.reduce((sum, item) => sum + convertToKg(item.consumeQuantity, item.unit), 0).toFixed(3),
-          totals.consumeAmount.toFixed(2),
-          allData.reduce((sum, item) => sum + convertToKg(item.currentQuantity, item.unit), 0).toFixed(3),
-          totals.currentAmount.toFixed(2),
-        ]);
-      }
-
-      exportToExcel(headers, data, filename);
       message.success('导出成功');
     } catch (error) {
-      console.error('Error exporting data:', error);
+      console.error('Export error:', error);
       message.error('导出失败');
     } finally {
       setLoading(false);
     }
-  }, [dataSource, totals, total]);
+  };
+
+  const calculateTotalAmount = (data: any[], field: string) => {
+    return data.reduce((sum, item) => {
+      return sum + item[field];
+    }, 0);
+  };
 
   const columns: ProColumns<InventoryItem>[] = [
     {
@@ -271,9 +342,10 @@ export default function InventoryCheckList() {
     },
     {
       title: '单价(元/kg)',
-      dataIndex: 'currentAmount',
-      width: 100,
-      render: (_, record) => formatAmount(record.currentAmount, record.currentQuantity, record.unit),
+      dataIndex: 'price',
+      width: 120,
+      valueType: 'money',
+      render: (_, record) => formatPrice(record.price),
     },
     {
       title: '上月结存',
@@ -283,13 +355,13 @@ export default function InventoryCheckList() {
           dataIndex: 'lastMonthQuantity',
           width: 100,
           valueType: 'digit',
-          render: (_, record) => formatQuantity(record.lastMonthQuantity, record.unit),
+          render: (value) => formatQuantity(Number(value)),
         },
         {
-          title: '金额',
-          dataIndex: 'lastMonthAmount',
+          title: '金额(元)',
           width: 100,
-          valueType: 'money',
+          dataIndex: 'lastMonthAmount',
+          render: (_, record) => formatAmount(record.lastMonthAmount),
         },
       ],
     },
@@ -299,15 +371,15 @@ export default function InventoryCheckList() {
         {
           title: '数量(kg)',
           dataIndex: 'purchaseQuantity',
-          width: 100,
+          width: 120,
           valueType: 'digit',
-          render: (_, record) => formatQuantity(record.purchaseQuantity, record.unit),
+          render: (value) => formatQuantity(Number(value)),
         },
         {
-          title: '金额',
+          title: '金额(元)',
+          width: 120,
           dataIndex: 'purchaseAmount',
-          width: 100,
-          valueType: 'money',
+          render: (_, record) => formatAmount(record.purchaseAmount),
         },
       ],
     },
@@ -319,13 +391,13 @@ export default function InventoryCheckList() {
           dataIndex: 'consumeQuantity',
           width: 100,
           valueType: 'digit',
-          render: (_, record) => formatQuantity(record.consumeQuantity, record.unit),
+          render: (value) => formatQuantity(Number(value)),
         },
         {
-          title: '金额',
-          dataIndex: 'consumeAmount',
+          title: '金额(元)',
           width: 100,
-          valueType: 'money',
+          dataIndex: 'consumeAmount',
+          render: (_, record) => formatAmount(record.consumeAmount),
         },
       ],
     },
@@ -337,13 +409,13 @@ export default function InventoryCheckList() {
           dataIndex: 'currentQuantity',
           width: 100,
           valueType: 'digit',
-          render: (_, record) => formatQuantity(record.currentQuantity, record.unit),
+          render: (value) => formatQuantity(Number(value)),
         },
         {
-          title: '金额',
-          dataIndex: 'currentAmount',
+          title: '金额(元)',
           width: 100,
-          valueType: 'money',
+          dataIndex: 'currentAmount',
+          render: (_, record) => formatAmount(record.currentAmount),
         },
       ],
     },
@@ -372,6 +444,20 @@ export default function InventoryCheckList() {
     },
   ];
 
+  const handleMonthChange = useCallback((date: dayjs.Dayjs) => {
+    console.log('Month changed:', {
+      from: selectedMonth.format('YYYY-MM'),
+      to: date.format('YYYY-MM'),
+      ...getInventoryDateRange(date),
+    });
+    setSelectedMonth(date);
+    setLoading(true);
+  }, [selectedMonth]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData, selectedMonth]);
+
   if (error) {
     return (
       <Card
@@ -392,27 +478,21 @@ export default function InventoryCheckList() {
     );
   }
 
-  const { startDate, endDate } = getMonthRange(selectedMonth.toDate());
-
   return (
     <Card
-      title={`库存盘点表`}
+      title={`库存盘点表 (${formatDateRange(dateRange)})`}
       extra={
         <Space direction="vertical" size="middle" style={{ width: '100%', textAlign: 'right' }}>
           <Space>
-            <MonthPicker
+            <DatePicker
+              picker="month"
               value={selectedMonth}
-              onChange={(date) => {
-                if (date) {
-                  setLoading(true);
-                  setSelectedMonth(date);
-                  setCurrent(1);
-                }
-              }}
-              format="YYYY年MM月"
-              style={{ width: '120px' }}
-              placeholder="选择月份"
+              onChange={handleMonthChange}
               allowClear={false}
+              disabledDate={(current) => {
+                // 只允许选择当前月份及之前的月份
+                return current && current > dayjs().endOf('month');
+              }}
             />
             <Button
               onClick={() => {
@@ -435,7 +515,7 @@ export default function InventoryCheckList() {
             </Button>
           </Space>
           <Text type="secondary" style={{ fontSize: '12px' }}>
-            统计区间：{dayjs(startDate).format('YYYY年MM月DD日')} 至 {dayjs(endDate).format('MM月DD日')}
+            统计区间：{dateRange.start} 至 {dateRange.end}
           </Text>
         </Space>
       }
@@ -459,24 +539,27 @@ export default function InventoryCheckList() {
           current,
           pageSize: PAGE_SIZE,
           total,
-          onChange: (page) => loadData(page),
+          onChange: (page) => loadData(),
         }}
-        summary={() => {
-          if (!totals) return null;
+        summary={(pageData) => {
+          // 计算各列金额总和
+          const lastMonthTotal = calculateTotalAmount(pageData, 'lastMonthAmount');
+          const purchaseTotal = calculateTotalAmount(pageData, 'purchaseAmount');
+          const consumeTotal = calculateTotalAmount(pageData, 'consumeAmount');
+          const currentTotal = calculateTotalAmount(pageData, 'currentAmount');
+
           return (
-            <Table.Summary fixed>
-              <Table.Summary.Row>
-                <Table.Summary.Cell index={0}>合计</Table.Summary.Cell>
-                <Table.Summary.Cell index={1} />
-                <Table.Summary.Cell index={2}>{formatMoney(totals.lastMonthAmount)}</Table.Summary.Cell>
-                <Table.Summary.Cell index={3} />
-                <Table.Summary.Cell index={4}>{formatMoney(totals.purchaseAmount)}</Table.Summary.Cell>
-                <Table.Summary.Cell index={5} />
-                <Table.Summary.Cell index={6}>{formatMoney(totals.consumeAmount)}</Table.Summary.Cell>
-                <Table.Summary.Cell index={7} />
-                <Table.Summary.Cell index={8}>{formatMoney(totals.currentAmount)}</Table.Summary.Cell>
-              </Table.Summary.Row>
-            </Table.Summary>
+            <Table.Summary.Row>
+              <Table.Summary.Cell index={0} colSpan={2}>合计</Table.Summary.Cell>
+              <Table.Summary.Cell index={2}></Table.Summary.Cell>
+              <Table.Summary.Cell index={3}>{formatAmount(lastMonthTotal)}</Table.Summary.Cell>
+              <Table.Summary.Cell index={4}></Table.Summary.Cell>
+              <Table.Summary.Cell index={5}>{formatAmount(purchaseTotal)}</Table.Summary.Cell>
+              <Table.Summary.Cell index={6}></Table.Summary.Cell>
+              <Table.Summary.Cell index={7}>{formatAmount(consumeTotal)}</Table.Summary.Cell>
+              <Table.Summary.Cell index={8}></Table.Summary.Cell>
+              <Table.Summary.Cell index={9}>{formatAmount(currentTotal)}</Table.Summary.Cell>
+            </Table.Summary.Row>
           );
         }}
       />

@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,7 +7,6 @@ datasource db {
   url      = "file:./dev.db"
 }
 
-// 用户模型
 model User {
   id            String        @id @default(cuid())
   name          String?
@@ -19,12 +15,12 @@ model User {
   image         String?
   password      String?
   role          String        @default("user")
-  accounts      Account[]
-  sessions      Session[]
-  transactions  Transaction[]
-  loginLogs     LoginLog[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+  accounts      Account[]
+  loginLogs     LoginLog[]
+  sessions      Session[]
+  transactions  Transaction[]
 }
 
 model Account {
@@ -40,8 +36,7 @@ model Account {
   scope             String?
   id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -54,17 +49,15 @@ model Session {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// 登录日志
 model LoginLog {
-  id        String    @id @default(cuid())
+  id        String   @id @default(cuid())
   userId    String
-  user      User      @relation(fields: [userId], references: [id])
   ip        String?
   userAgent String?
-  createdAt DateTime  @default(now())
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
 }
 
-// 商品列表模型（用于存储不同价格的商品）
 model ProductList {
   id        Int       @id @default(autoincrement())
   name      String
@@ -73,84 +66,77 @@ model ProductList {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   products  Product[]
-  
+
   @@unique([name, price])
 }
 
-// 产品记录模型（用于存储每次录入的商品）
 model Product {
-  id            Int         @id @default(autoincrement())
-  name          String
-  unitPrice     Float
-  quantity      Float
-  price         Float
-  unit          String
-  kgRatio       Float      @default(1)
-  importDate    DateTime
-  productList   ProductList @relation(fields: [productListId], references: [id])
-  productListId Int
-  inventory     Inventory?
-  stockLogs     StockLog[]
-  transactions  Transaction[]
+  id              Int              @id @default(autoincrement())
+  name            String
+  unitPrice       Float
+  quantity        Float
+  price           Float
+  unit            String
+  kgRatio         Float            @default(1)
+  importDate      DateTime
+  productListId   Int
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  inventory       Inventory?
   inventoryChecks InventoryCheck[]
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  productList     ProductList      @relation(fields: [productListId], references: [id])
+  stockLogs       StockLog[]
+  transactions    Transaction[]
 }
 
-// 库存模型
 model Inventory {
   id        Int      @id @default(autoincrement())
   quantity  Float    @default(0)
-  product   Product  @relation(fields: [productId], references: [id])
   productId Int      @unique
-  minStock  Int      @default(0) // 最小库存
-  maxStock  Int?     // 最大库存
+  minStock  Int      @default(0)
+  maxStock  Int?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  product   Product  @relation(fields: [productId], references: [id])
 }
 
-// 库存变动记录
 model StockLog {
   id          Int      @id @default(autoincrement())
   productId   Int
-  product     Product  @relation(fields: [productId], references: [id])
-  type        String   // IN: 入库, OUT: 出库
+  type        String
   quantity    Float
-  beforeStock Float    // 变动前库存
-  afterStock  Float    // 变动后库存
+  beforeStock Float
+  afterStock  Float
   note        String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  product     Product  @relation(fields: [productId], references: [id])
 }
 
-// 库存盘点记录
 model InventoryCheck {
-  id          Int      @id @default(autoincrement())
-  productId   Int
-  product     Product  @relation(fields: [productId], references: [id])
-  date        DateTime
-  type        String   // purchase: 采购, consume: 消耗
-  quantity    Float
-  amount      Float
-  note        String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@unique([productId, date, type])
+  id        Int      @id @default(autoincrement())
+  productId Int
+  date      DateTime
+  type      String
+  quantity  Float
+  amount    Float
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  product   Product  @relation(fields: [productId], references: [id])
 }
 
-// 交易记录
 model Transaction {
   id          Int      @id @default(autoincrement())
   productId   Int
-  product     Product  @relation(fields: [productId], references: [id])
   userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  type        String   // IN: 入库, OUT: 出库
+  type        String
   quantity    Float
   price       Float
   totalAmount Float
   note        String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id])
+  product     Product  @relation(fields: [productId], references: [id])
 }

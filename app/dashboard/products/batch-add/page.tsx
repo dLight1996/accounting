@@ -22,25 +22,6 @@ export default function BatchAddPage() {
   const [date, setDate] = useState<dayjs.Dayjs | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // 计算当前周期的开始和结束日期
-  const getCurrentCycleDates = () => {
-    const today = dayjs();
-    const currentDay = today.date();
-    let cycleStart, cycleEnd;
-
-    if (currentDay <= 25) {
-      cycleStart = today.subtract(1, 'month').date(26);
-      cycleEnd = today.date(25);
-    } else {
-      cycleStart = today.date(26);
-      cycleEnd = today.add(1, 'month').date(25);
-    }
-
-    return { cycleStart, cycleEnd };
-  };
-
-  const { cycleStart, cycleEnd } = getCurrentCycleDates();
-
   const unitOptions = [
     { value: 'kg', label: 'kg' },
     { value: 'g', label: 'g' },
@@ -106,7 +87,7 @@ export default function BatchAddPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          date: date.toISOString(),
+          date: date.format('YYYY-MM-DD'),  // 只使用日期部分
           products: dataSource.map(item => ({
             name: item.name,
             unitPrice: item.unitPrice,
@@ -127,15 +108,24 @@ export default function BatchAddPage() {
       
       // 清空表格数据
       setDataSource([]);
-      // 重置日期为当前周期
-      const { startDate, endDate } = getCurrentCycleDates();
-      setDate(endDate);
+      // 保持当前选择的日期
       
     } catch (error: any) {
       message.error(error.message || '保存失败');
     } finally {
       setLoading(false);
     }
+  };
+
+  // 检查是否所有必填字段都已填写
+  const isDataValid = () => {
+    if (!date || dataSource.length === 0) return false;
+    
+    return dataSource.every(item => 
+      item.name && // 商品名称必填
+      item.unitPrice > 0 && // 单价必须大于0
+      item.quantity > 0 // 数量必须大于0
+    );
   };
 
   // 计算总价
@@ -145,7 +135,11 @@ export default function BatchAddPage() {
 
   const columns = [
     {
-      title: '商品名称',
+      title: (
+        <span>
+          商品名称 <span style={{ color: '#ff4d4f' }}>*</span>
+        </span>
+      ),
       dataIndex: 'name',
       width: 200,
       render: (text: string, record: ProductEntry) => (
@@ -158,11 +152,16 @@ export default function BatchAddPage() {
             setDataSource(newData);
           }}
           placeholder="请输入商品名称"
+          status={!text ? 'error' : ''}
         />
       ),
     },
     {
-      title: '单价',
+      title: (
+        <span>
+          单价 <span style={{ color: '#ff4d4f' }}>*</span>
+        </span>
+      ),
       dataIndex: 'unitPrice',
       width: 120,
       render: (text: number, record: ProductEntry) => (
@@ -181,11 +180,16 @@ export default function BatchAddPage() {
           precision={2}
           style={{ width: '100%' }}
           addonAfter={`元/${record.unit}`}
+          status={!text || text <= 0 ? 'error' : undefined}
         />
       ),
     },
     {
-      title: '数量',
+      title: (
+        <span>
+          数量 <span style={{ color: '#ff4d4f' }}>*</span>
+        </span>
+      ),
       dataIndex: 'quantity',
       width: 120,
       render: (text: number, record: ProductEntry) => (
@@ -204,6 +208,7 @@ export default function BatchAddPage() {
           precision={2}
           style={{ width: '100%' }}
           addonAfter={record.unit}
+          status={!text || text <= 0 ? 'error' : undefined}
         />
       ),
     },
@@ -316,19 +321,14 @@ export default function BatchAddPage() {
           <Form.Item
             label="选择录入日期"
             required
-            tooltip="选择商品录入的日期，必须在当前周期内"
+            tooltip="选择商品录入的日期"
           >
             <DatePicker
               value={date}
               onChange={setDate}
-              disabledDate={(current) => {
-                return current && (
-                  current < cycleStart.startOf('day') ||
-                  current > cycleEnd.endOf('day')
-                );
-              }}
               style={{ width: '100%' }}
-              placeholder={`${cycleStart.format('YYYY-MM-DD')} 至 ${cycleEnd.format('YYYY-MM-DD')}`}
+              placeholder="请选择录入日期"
+              format="YYYY-MM-DD"
             />
           </Form.Item>
         </div>
@@ -379,7 +379,7 @@ export default function BatchAddPage() {
             icon={<SaveOutlined />}
             onClick={handleSave}
             loading={loading}
-            disabled={dataSource.length === 0 || !date}
+            disabled={!isDataValid()}
           >
             保存
           </Button>
